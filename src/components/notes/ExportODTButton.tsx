@@ -8,6 +8,8 @@ import { useODTExport } from '@/hooks/useODTExport';
 interface ExportODTButtonProps {
   notes: StructuredNote[];
   title?: string;
+  /** Currently selected filter tags to include in the export header */
+  filterTags?: string[];
   variant?: 'default' | 'outline' | 'secondary';
   className?: string;
 }
@@ -15,6 +17,7 @@ interface ExportODTButtonProps {
 export function ExportODTButton({
   notes,
   title,
+  filterTags,
   variant = 'outline',
   className,
 }: ExportODTButtonProps) {
@@ -34,7 +37,7 @@ export function ExportODTButton({
 
     setIsExporting(true);
     try {
-      await exportToODT(notes, title);
+      await exportToODT(notes, title, filterTags);
       toast({
         title: 'Export successful',
         description: `Exported ${notes.length} note(s) as ODT document.`,

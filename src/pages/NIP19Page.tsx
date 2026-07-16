@@ -14,6 +14,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, Clock, User, Pencil } from 'lucide-react';
 import { CommentsSection } from '@/components/comments/CommentsSection';
 import type { NostrEvent } from '@nostrify/nostrify';
+import { APP_AUTHOR_PUBKEY } from '@/lib/appAuthor';
 import NotFound from './NotFound';
 
 export function NIP19Page() {
@@ -34,7 +35,7 @@ export function NIP19Page() {
 
   // Structured Note (kind 30023 NIP-23) - render full note view
   if (type === 'naddr' && decoded.data.kind === 30023) {
-    return <StructuredNoteView id={decoded.data.identifier} author={decoded.data.pubkey} />;
+    return <StructuredNoteView id={decoded.data.identifier} />;
   }
 
   // Regular nevent
@@ -56,15 +57,15 @@ export function NIP19Page() {
 }
 
 /** Full view for a structured text note (kind 30023 NIP-23) with edit support */
-function StructuredNoteView({ id, author: authorPubkey }: { id: string; author?: string }) {
-  const { data: note, isLoading, error } = useStructuredNote(id, authorPubkey);
-  const author = useAuthor(authorPubkey ?? '');
+function StructuredNoteView({ id }: { id: string }) {
+  const { data: note, isLoading, error } = useStructuredNote(id);
+  const author = useAuthor(APP_AUTHOR_PUBKEY);
   const { user } = useCurrentUser();
   const { mutateAsync: publishNote, isPending: isPublishing } = usePublishNote();
   const { toast } = useToast();
   const [editing, setEditing] = useState(false);
 
-  const isOwner = user?.pubkey === (authorPubkey ?? note?.pubkey);
+  const isOwner = user?.pubkey === APP_AUTHOR_PUBKEY;
 
   useSeoMeta({
     title: note ? `${note.title} — cwtext` : 'Loading... — cwtext',

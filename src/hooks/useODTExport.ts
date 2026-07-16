@@ -4,9 +4,11 @@ import type { StructuredNote } from './useStructuredNotes';
 
 /**
  * Generate an ODT (Open Document Text) file from a list of notes.
- * Returns a Blob that can be downloaded.
+ * @param notes - The notes to export.
+ * @param title - Optional document title.
+ * @param tags - Optional list of active filter tags to include in the header.
  */
-async function generateODT(notes: StructuredNote[], title?: string): Promise<Blob> {
+async function generateODT(notes: StructuredNote[], title?: string, tags?: string[]): Promise<Blob> {
   const zip = new JSZip();
 
   // -- mimetype (must be first, uncompressed) --
@@ -89,20 +91,21 @@ async function generateODT(notes: StructuredNote[], title?: string): Promise<Blo
   // Generation info
   const now = new Date().toLocaleString();
   contentBody += `<text:p text:style-name="Tags">Generated on ${escapeXml(now)} — ${notes.length} note(s)</text:p>\n`;
+
+  // Active filter tags in header (if any)
+  if (tags && tags.length > 0) {
+    const tagStr = tags.map((t) => `#${escapeXml(t)}`).join(', ');
+    contentBody += `<text:p text:style-name="Tags">Tags: ${escapeXml(tagStr)}</text:p>\n`;
+  }
+
   contentBody += `<text:p text:style-name="Separator">──────────</text:p>\n`;
 
   // Ordered list of notes
   for (let i = 0; i < notes.length; i++) {
     const note = notes[i];
 
-    // Numbered heading
-    contentBody += `<text:h text:style-name="Heading1">${i + 1}. ${escapeXml(note.title)}</text:h>\n`;
-
-    // Tags
-    if (note.tags.length > 0) {
-      const tagStr = note.tags.map((t) => `#${escapeXml(t)}`).join(', ');
-      contentBody += `<text:p text:style-name="Tags">${escapeXml(tagStr)}</text:p>\n`;
-    }
+    // Heading (no numbering, no per-note tags)
+    contentBody += `<text:h text:style-name="Heading1">${escapeXml(note.title)}</text:h>\n`;
 
     // Content body - escape and preserve paragraphs
     const paragraphs = note.content.split(/\n\s*\n/);
@@ -143,12 +146,12 @@ async function generateODT(notes: StructuredNote[], title?: string): Promise<Blo
 /** Hook that provides an ODT export function */
 export function useODTExport() {
   const exportToODT = useCallback(
-    async (notes: StructuredNote[], title?: string): Promise<void> => {
+    async (notes: StructuredNote[], title?: string, tags?: string[]): Promise<void> => {
       if (notes.length === 0) {
         throw new Error('No notes to export');
       }
 
-      const blob = await generateODT(notes, title);
+      const blob = await generateODT(notes, title, tags);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

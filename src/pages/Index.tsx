@@ -33,18 +33,17 @@ const Index = () => {
       'Create, search, tag, comment, and export structured text notes on Nostr.',
   });
 
-  // Extract tags only from the current user's notes
+  // Extract tags from all notes (all scoped to app author)
   const tagCounts = useMemo(() => {
-    if (!notes || !user) return new Map<string, number>();
+    if (!notes) return new Map<string, number>();
     const counts = new Map<string, number>();
     for (const note of notes) {
-      if (note.pubkey !== user.pubkey) continue;
       for (const tag of note.tags) {
         counts.set(tag, (counts.get(tag) || 0) + 1);
       }
     }
     return counts;
-  }, [notes, user]);
+  }, [notes]);
 
   // Filter notes based on search and selected tags
   const filteredNotes = useMemo(() => {
@@ -133,7 +132,7 @@ const Index = () => {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <ExportODTButton notes={filteredNotes} title="cwtext_export" />
+            <ExportODTButton notes={filteredNotes} title="cwtext_export" filterTags={selectedTags} />
             <LoginArea className="w-auto" />
           </div>
         </div>

@@ -2,6 +2,7 @@ import { type NostrEvent } from '@nostrify/nostrify';
 import { useNostr } from '@nostrify/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNostrPublish } from './useNostrPublish';
+import { APP_AUTHOR_PUBKEY } from '@/lib/appAuthor';
 
 const NOTE_KIND = 30023;
 
@@ -61,22 +62,19 @@ interface UseNotesOptions {
   limit?: number;
 }
 
-/** Fetch structured text notes with optional filtering */
+/** Fetch structured text notes with optional filtering (always scoped to the app author) */
 export function useStructuredNotes(options: UseNotesOptions = {}) {
   const { nostr } = useNostr();
-  const { authors, tags, search, limit = 100 } = options;
+  const { tags, search, limit = 100 } = options;
 
   return useQuery({
-    queryKey: ['nostr', 'notes', authors, tags, search, limit],
+    queryKey: ['nostr', 'notes', APP_AUTHOR_PUBKEY, tags, search, limit],
     queryFn: async () => {
       const filter: Record<string, unknown> = {
         kinds: [NOTE_KIND],
+        authors: [APP_AUTHOR_PUBKEY],
         limit: limit * 2, // Fetch extra for client-side filtering
       };
-
-      if (authors && authors.length > 0) {
-        filter.authors = authors;
-      }
 
       if (tags && tags.length > 0) {
         filter['#t'] = tags;
@@ -104,22 +102,19 @@ export function useStructuredNotes(options: UseNotesOptions = {}) {
   });
 }
 
-/** Fetch a single structured note by its d-tag identifier and author */
-export function useStructuredNote(id: string, author?: string) {
+/** Fetch a single structured note by its d-tag identifier (always scoped to the app author) */
+export function useStructuredNote(id: string) {
   const { nostr } = useNostr();
 
   return useQuery({
-    queryKey: ['nostr', 'note', id, author],
+    queryKey: ['nostr', 'note', APP_AUTHOR_PUBKEY, id],
     queryFn: async () => {
       const filter: Record<string, unknown> = {
         kinds: [NOTE_KIND],
+        authors: [APP_AUTHOR_PUBKEY],
         '#d': [id],
         limit: 1,
       };
-
-      if (author) {
-        filter.authors = [author];
-      }
 
       const events = await nostr.query([filter], {
         signal: AbortSignal.timeout(5000),
