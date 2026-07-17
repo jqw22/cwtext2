@@ -1,11 +1,10 @@
 import { type NostrEvent } from '@nostrify/nostrify';
 import { useNostr } from '@nostrify/react';
-import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNostrPublish } from './useNostrPublish';
 import { APP_AUTHOR_PUBKEY } from '@/lib/appAuthor';
 
 const NOTE_KIND = 30023;
-const PAGE_SIZE = 50;
 
 /** Data extracted from a kind 30023 (NIP-23) long-form content note */
 export interface StructuredNote {
@@ -57,32 +56,28 @@ interface UseNotesOptions {
   tags?: string[];
   /** Search text in title/content */
   search?: string;
-  /** Page size for pagination */
+  /** Maximum notes to fetch */
   limit?: number;
-  /** Only fetch when true (defaults to true) */
+  /** Only fetch when true */
   enabled?: boolean;
 }
 
 /**
- * Fetch structured text notes with paginated infinite scroll.
- * Always scoped to the app author. Use `enabled` to gate the query.
+ * Fetch structured text notes. Always scoped to the app author.
+ * Use `enabled` to gate the query (e.g. only fetch after user searches).
  */
 export function useStructuredNotes(options: UseNotesOptions = {}) {
   const { nostr } = useNostr();
-  const { tags, search, limit = PAGE_SIZE, enabled = true } = options;
+  const { tags, search, limit = 200, enabled = true } = options;
 
-  return useInfiniteQuery({
+  return useQuery({
     queryKey: ['nostr', 'notes', APP_AUTHOR_PUBKEY, tags, search, limit],
-    queryFn: async ({ pageParam }) => {
+    queryFn: async () => {
       const filter: Record<string, unknown> = {
         kinds: [NOTE_KIND],
         authors: [APP_AUTHOR_PUBKEY],
-        limit,
+        limit: limit * 2, // Fetch extra for client-side search filtering
       };
-
-      if (pageParam !== undefined) {
-        filter.until = pageParam;
-      }
 
       if (tags && tags.length > 0) {
         filter['#t'] = tags;
@@ -105,13 +100,8 @@ export function useStructuredNotes(options: UseNotesOptions = {}) {
         );
       }
 
-      return notes;
+      return notes.slice(0, limit);
     },
-    getNextPageParam: (lastPage) => {
-      if (!lastPage || lastPage.length < limit) return undefined;
-      return lastPage[lastPage.length - 1].createdAt - 1;
-    },
-    initialPageParam: undefined as number | undefined,
     enabled,
   });
 }
