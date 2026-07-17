@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, PenLine, Search } from 'lucide-react';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { useStructuredNotes, usePublishNote } from '@/hooks/useStructuredNotes';
+import { useStructuredNotes, usePublishNote, type StructuredNote } from '@/hooks/useStructuredNotes';
 import { useToast } from '@/hooks/useToast';
 
 const Index = () => {
@@ -66,12 +66,14 @@ const Index = () => {
 
   // Flatten all pages and deduplicate by id
   const allNotes = useMemo(() => {
-    if (!data?.pages) return [];
+    const pages = data?.pages;
+    if (!pages || !Array.isArray(pages)) return [];
     const seen = new Set<string>();
-    const result: ReturnType<typeof data.pages[0]> = [];
-    for (const page of data.pages) {
+    const result: StructuredNote[] = [];
+    for (const page of pages) {
+      if (!Array.isArray(page)) continue;
       for (const note of page) {
-        if (!seen.has(note.id)) {
+        if (note && !seen.has(note.id)) {
           seen.add(note.id);
           result.push(note);
         }
