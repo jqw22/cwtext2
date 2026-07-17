@@ -5,9 +5,12 @@ import Index from "./pages/Index";
 import { NIP19Page } from "./pages/NIP19Page";
 import NotFound from "./pages/NotFound";
 
+// GitHub Pages serves at /cwtext2/ — Router needs to know this
+const basename = window.location.hostname.includes('github.io') ? '/cwtext2' : undefined;
+
 export function AppRouter() {
   return (
-    <BrowserRouter basename="/cwtext2">
+    <BrowserRouter basename={basename}>
       <ScrollToTop />
       <Routes>
         <Route path="/" element={<Index />} />
