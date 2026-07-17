@@ -34,6 +34,7 @@ export default defineConfig(() => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      jszip: path.resolve(__dirname, "node_modules/jszip/dist/jszip.min.js"),
     },
   },
 }));
