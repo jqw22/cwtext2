@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import JSZip from 'jszip';
+import JSZip from 'https://esm.sh/jszip@3.10.1';
 import type { StructuredNote } from './useStructuredNotes';
 
 /**
