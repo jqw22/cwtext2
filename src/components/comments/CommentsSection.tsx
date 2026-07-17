@@ -62,7 +62,7 @@ export function CommentsSection({
         <div className="text-center py-8 text-muted-foreground">
           <Lock className="h-12 w-12 mx-auto mb-4 opacity-30" />
           <p className="text-lg font-medium mb-2">Your notes</p>
-          <p className="text-sm">Only you can see your comments.</p>
+          <p className="text-sm">This client only shows your comments here. Comments are published to Nostr relays and may be visible elsewhere.</p>
         </div>
       ) : (
         <div className="space-y-4">

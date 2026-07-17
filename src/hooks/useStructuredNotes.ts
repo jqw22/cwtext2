@@ -1,10 +1,11 @@
 import { type NostrEvent } from '@nostrify/nostrify';
 import { useNostr } from '@nostrify/react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNostrPublish } from './useNostrPublish';
 import { APP_AUTHOR_PUBKEY } from '@/lib/appAuthor';
 
 const NOTE_KIND = 30023;
+const PAGE_SIZE = 50;
 
 /** Data extracted from a kind 30023 (NIP-23) long-form content note */
 export interface StructuredNote {
@@ -36,14 +37,14 @@ function parseNote(event: NostrEvent): StructuredNote {
   const getAllTags = (name: string): string[] =>
     event.tags.filter(([n]) => n === name).map(([, v]) => v);
 
+  const publishedAtTag = getTag('published_at');
+
   return {
     event,
     title: getTag('title') ?? 'Untitled',
     content: event.content ?? '',
     tags: getAllTags('t'),
-    publishedAt: getTag('published_at')
-      ? Number(getTag('published_at'))
-      : undefined,
+    publishedAt: publishedAtTag ? Number(publishedAtTag) : undefined,
     id: getTag('d') ?? event.id,
     pubkey: event.pubkey,
     createdAt: event.created_at,
@@ -52,29 +53,36 @@ function parseNote(event: NostrEvent): StructuredNote {
 }
 
 interface UseNotesOptions {
-  /** Filter by author pubkey(s) */
-  authors?: string[];
   /** Filter by category tags */
   tags?: string[];
   /** Search text in title/content */
   search?: string;
-  /** Maximum notes to fetch */
+  /** Page size for pagination */
   limit?: number;
+  /** Only fetch when true (defaults to true) */
+  enabled?: boolean;
 }
 
-/** Fetch structured text notes with optional filtering (always scoped to the app author) */
+/**
+ * Fetch structured text notes with paginated infinite scroll.
+ * Always scoped to the app author. Use `enabled` to gate the query.
+ */
 export function useStructuredNotes(options: UseNotesOptions = {}) {
   const { nostr } = useNostr();
-  const { tags, search, limit = 100 } = options;
+  const { tags, search, limit = PAGE_SIZE, enabled = true } = options;
 
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ['nostr', 'notes', APP_AUTHOR_PUBKEY, tags, search, limit],
-    queryFn: async () => {
+    queryFn: async ({ pageParam }) => {
       const filter: Record<string, unknown> = {
         kinds: [NOTE_KIND],
         authors: [APP_AUTHOR_PUBKEY],
-        limit: limit * 2, // Fetch extra for client-side filtering
+        limit,
       };
+
+      if (pageParam !== undefined) {
+        filter.until = pageParam;
+      }
 
       if (tags && tags.length > 0) {
         filter['#t'] = tags;
@@ -86,7 +94,7 @@ export function useStructuredNotes(options: UseNotesOptions = {}) {
 
       let notes = events.map(parseNote);
 
-      // Client-side search filter
+      // Client-side search filter (relays don't support full-text)
       if (search) {
         const q = search.toLowerCase();
         notes = notes.filter(
@@ -97,8 +105,14 @@ export function useStructuredNotes(options: UseNotesOptions = {}) {
         );
       }
 
-      return notes.slice(0, limit);
+      return notes;
     },
+    getNextPageParam: (lastPage) => {
+      if (!lastPage || lastPage.length < limit) return undefined;
+      return lastPage[lastPage.length - 1].createdAt - 1;
+    },
+    initialPageParam: undefined as number | undefined,
+    enabled,
   });
 }
 

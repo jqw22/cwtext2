@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { zipSync, strToU8 } from 'fflate';
 import type { StructuredNote } from './useStructuredNotes';
 
 /**
@@ -7,15 +8,7 @@ import type { StructuredNote } from './useStructuredNotes';
  * @param title - Optional document title.
  * @param tags - Optional list of active filter tags to include in the header.
  */
-async function generateODT(notes: StructuredNote[], title?: string, tags?: string[]): Promise<Blob> {
-  const JSZip = (await import('https://esm.sh/jszip@3.10.1')).default;
-  const zip = new JSZip();
-
-  // -- mimetype (must be first, uncompressed) --
-  zip.file('mimetype', 'application/vnd.oasis.opendocument.text', {
-    compression: 'STORE',
-  });
-
+function generateODT(notes: StructuredNote[], title?: string, tags?: string[]): Blob {
   // -- META-INF/manifest.xml --
   const manifest = `<?xml version="1.0" encoding="UTF-8"?>
 <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"
@@ -29,7 +22,6 @@ async function generateODT(notes: StructuredNote[], title?: string, tags?: strin
   <manifest:file-entry manifest:full-path="meta.xml"
                        manifest:media-type="text/xml"/>
 </manifest:manifest>`;
-  zip.file('META-INF/manifest.xml', manifest);
 
   // -- meta.xml --
   const meta = `<?xml version="1.0" encoding="UTF-8"?>
@@ -42,7 +34,6 @@ async function generateODT(notes: StructuredNote[], title?: string, tags?: strin
     <meta:initial-creator>cwtext</meta:initial-creator>
   </office:meta>
 </office:document-meta>`;
-  zip.file('meta.xml', meta);
 
   // -- styles.xml --
   const styles = `<?xml version="1.0" encoding="UTF-8"?>
@@ -71,7 +62,6 @@ async function generateODT(notes: StructuredNote[], title?: string, tags?: strin
     </style:style>
   </office:styles>
 </office:document-styles>`;
-  zip.file('styles.xml', styles);
 
   // -- content.xml --
   const escapeXml = (s: string): string =>
@@ -137,10 +127,17 @@ async function generateODT(notes: StructuredNote[], title?: string, tags?: strin
     </office:text>
   </office:body>
 </office:document-content>`;
-  zip.file('content.xml', contentXml);
 
-  // Generate the ZIP as a Blob
-  return zip.generateAsync({ type: 'blob' });
+  // Generate the ZIP as a Blob using fflate
+  const zipped = zipSync({
+    'mimetype': strToU8('application/vnd.oasis.opendocument.text'),
+    'META-INF/manifest.xml': strToU8(manifest),
+    'meta.xml': strToU8(meta),
+    'styles.xml': strToU8(styles),
+    'content.xml': strToU8(contentXml),
+  }, { level: { 'mimetype': 0 } });
+
+  return new Blob([zipped], { type: 'application/vnd.oasis.opendocument.text' });
 }
 
 /** Hook that provides an ODT export function */
@@ -151,7 +148,7 @@ export function useODTExport() {
         throw new Error('No notes to export');
       }
 
-      const blob = await generateODT(notes, title, tags);
+      const blob = generateODT(notes, title, tags);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

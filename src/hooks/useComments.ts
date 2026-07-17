@@ -27,7 +27,7 @@ export function useComments(root: NostrEvent | URL | `#${string}`, limit?: numbe
         filter.limit = limit;
       }
 
-      // Query for all kind 1111 comments that reference this addressable event regardless of depth
+      // Query for all kind 1111 comments that reference this event
       const signal = AbortSignal.timeout(5000);
       const events = await nostr.query([filter], { signal });
 
@@ -37,7 +37,23 @@ export function useComments(root: NostrEvent | URL | `#${string}`, limit?: numbe
         return tag?.[1];
       };
 
-      // Filter top-level comments (those with lowercase tag matching the root)
+      // Build parent→children adjacency map (O(n) instead of O(n²))
+      const childrenMap = new Map<string, NostrEvent[]>();
+      for (const event of events) {
+        const parentId = getTagValue(event, 'e');
+        if (parentId) {
+          const children = childrenMap.get(parentId) ?? [];
+          children.push(event);
+          childrenMap.set(parentId, children);
+        }
+      }
+
+      // Sort children by creation time (oldest first)
+      for (const children of childrenMap.values()) {
+        children.sort((a, b) => a.created_at - b.created_at);
+      }
+
+      // Filter top-level comments
       const topLevelComments = events.filter(comment => {
         if (typeof root === 'string') {
           return getTagValue(comment, 'i') === root;
@@ -53,48 +69,36 @@ export function useComments(root: NostrEvent | URL | `#${string}`, limit?: numbe
         }
       });
 
-      // Helper function to get all descendants of a comment
-      const getDescendants = (parentId: string): NostrEvent[] => {
-        const directReplies = events.filter(comment => {
-          const eTag = getTagValue(comment, 'e');
-          return eTag === parentId;
-        });
-
-        const allDescendants = [...directReplies];
-        
-        // Recursively get descendants of each direct reply
-        for (const reply of directReplies) {
-          allDescendants.push(...getDescendants(reply.id));
-        }
-
-        return allDescendants;
-      };
-
-      // Create a map of comment ID to its descendants
-      const commentDescendants = new Map<string, NostrEvent[]>();
-      for (const comment of events) {
-        commentDescendants.set(comment.id, getDescendants(comment.id));
-      }
-
       // Sort top-level comments by creation time (newest first)
       const sortedTopLevel = topLevelComments.sort((a, b) => b.created_at - a.created_at);
+
+      // O(n) descendant lookup using the adjacency map
+      const getDescendantsRecursive = (parentId: string, result: NostrEvent[] = []): NostrEvent[] => {
+        const children = childrenMap.get(parentId);
+        if (!children) return result;
+        for (const child of children) {
+          result.push(child);
+          getDescendantsRecursive(child.id, result);
+        }
+        return result;
+      };
+
+      // Cache descendant results
+      const descendantCache = new Map<string, NostrEvent[]>();
 
       return {
         allComments: events,
         topLevelComments: sortedTopLevel,
         getDescendants: (commentId: string) => {
-          const descendants = commentDescendants.get(commentId) || [];
-          // Sort descendants by creation time (oldest first for threaded display)
-          return descendants.sort((a, b) => a.created_at - b.created_at);
+          const cached = descendantCache.get(commentId);
+          if (cached) return cached;
+          const descendants = getDescendantsRecursive(commentId);
+          descendantCache.set(commentId, descendants);
+          return descendants;
         },
         getDirectReplies: (commentId: string) => {
-          const directReplies = events.filter(comment => {
-            const eTag = getTagValue(comment, 'e');
-            return eTag === commentId;
-          });
-          // Sort direct replies by creation time (oldest first for threaded display)
-          return directReplies.sort((a, b) => a.created_at - b.created_at);
-        }
+          return childrenMap.get(commentId) ?? [];
+        },
       };
     },
     enabled: !!root,

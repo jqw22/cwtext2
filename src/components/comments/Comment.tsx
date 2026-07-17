@@ -40,6 +40,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { sanitizeUrl } from '@/lib/sanitizeUrl';
 
 interface CommentProps {
   root: NostrEvent | URL | `#${string}`;
@@ -55,6 +56,9 @@ export function Comment({ root, comment, depth = 0, maxDepth = 3, limit, showOnl
   const [showReplies, setShowReplies] = useState(depth < 2); // Auto-expand first 2 levels
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
+  // Don't recurse beyond maxDepth
+  if (depth >= maxDepth) return null;
+
   const author = useAuthor(comment.pubkey);
   const { data: commentsData } = useComments(root, limit);
   const { user } = useCurrentUser();
@@ -67,6 +71,7 @@ export function Comment({ root, comment, depth = 0, maxDepth = 3, limit, showOnl
   const timeAgo = formatDistanceToNow(new Date(comment.created_at * 1000), { addSuffix: true });
   const nevent = nip19.neventEncode({ id: comment.id, author: comment.pubkey, kind: comment.kind });
   const isOwnComment = user?.pubkey === comment.pubkey;
+  const pictureUrl = sanitizeUrl(metadata?.picture);
 
   // Get direct replies (filtered to own if showOnlyOwn)
   const allReplies = commentsData?.getDirectReplies(comment.id) || [];
@@ -133,7 +138,7 @@ export function Comment({ root, comment, depth = 0, maxDepth = 3, limit, showOnl
               <div className="flex items-center space-x-3">
                 <Link to={`/${nip19.npubEncode(comment.pubkey)}`}>
                   <Avatar className="h-8 w-8 hover:ring-2 hover:ring-primary/30 transition-all cursor-pointer">
-                    <AvatarImage src={metadata?.picture} />
+                    <AvatarImage src={pictureUrl} />
                     <AvatarFallback className="text-xs">
                       {displayName.charAt(0)}
                     </AvatarFallback>

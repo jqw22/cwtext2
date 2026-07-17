@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useSeoMeta } from '@unhead/react';
 import { LoginArea } from '@/components/auth/LoginArea';
 import { NoteForm } from '@/components/notes/NoteForm';
@@ -11,6 +11,7 @@ import { Plus, PenLine, Search } from 'lucide-react';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useStructuredNotes, usePublishNote } from '@/hooks/useStructuredNotes';
 import { useToast } from '@/hooks/useToast';
+
 const Index = () => {
   const { user } = useCurrentUser();
   const { toast } = useToast();
@@ -21,11 +22,41 @@ const Index = () => {
   // A search is "initiated" when the user has typed something or selected a tag
   const hasSearched = search.trim().length > 0 || selectedTags.length > 0;
 
-  // Always fetch notes (for tags), but only display results after search
-  const { data: notes, isLoading, error } = useStructuredNotes({
-    limit: 100,
+  // Only fetch notes after a search has been initiated (uses enabled gate)
+  const {
+    data,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    error,
+  } = useStructuredNotes({
+    tags: selectedTags.length > 0 ? selectedTags : undefined,
+    search: search.trim() || undefined,
+    enabled: hasSearched,
   });
+
   const { mutateAsync: publishNote, isPending: isPublishing } = usePublishNote();
+
+  // Intersection observer sentinel for infinite scroll
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasNextPage || isFetchingNextPage) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          fetchNextPage();
+        }
+      },
+      { rootMargin: '200px' },
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   useSeoMeta({
     title: 'cwtext — Structured Notes',
@@ -33,32 +64,47 @@ const Index = () => {
       'Create, search, tag, comment, and export structured text notes on Nostr.',
   });
 
-  // Extract tags from all notes (all scoped to app author)
+  // Flatten all pages and deduplicate by id
+  const allNotes = useMemo(() => {
+    if (!data?.pages) return [];
+    const seen = new Set<string>();
+    const result: ReturnType<typeof data.pages[0]> = [];
+    for (const page of data.pages) {
+      for (const note of page) {
+        if (!seen.has(note.id)) {
+          seen.add(note.id);
+          result.push(note);
+        }
+      }
+    }
+    return result;
+  }, [data?.pages]);
+
+  // Extract tags from all loaded notes for the tag browser
   const tagCounts = useMemo(() => {
-    if (!notes) return new Map<string, number>();
     const counts = new Map<string, number>();
-    for (const note of notes) {
+    for (const note of allNotes) {
       for (const tag of note.tags) {
         counts.set(tag, (counts.get(tag) || 0) + 1);
       }
     }
     return counts;
-  }, [notes]);
+  }, [allNotes]);
 
-  // Filter notes based on search and selected tags
+  // Filter notes based on search and selected tags (client-side for search text)
   const filteredNotes = useMemo(() => {
-    if (!notes || !hasSearched) return [];
+    if (!hasSearched) return [];
 
-    let result = notes;
+    let result = allNotes;
 
-    // Filter by selected tags
+    // Tag filtering already done at relay level, but double-check for safety
     if (selectedTags.length > 0) {
       result = result.filter((note) =>
         selectedTags.some((tag) => note.tags.includes(tag)),
       );
     }
 
-    // Search filter (title, content, tags)
+    // Search filter (title, content, tags) — client-side only
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(
@@ -78,7 +124,7 @@ const Index = () => {
     });
 
     return result;
-  }, [notes, selectedTags, search]);
+  }, [allNotes, selectedTags, search, hasSearched]);
 
   const handleAddTag = useCallback((tag: string) => {
     setSelectedTags((prev) =>
@@ -197,7 +243,7 @@ const Index = () => {
           </div>
         )}
 
-        {/* Loading state */}
+        {/* Loading state (first page) */}
         {hasSearched && isLoading && (
           <div className="space-y-5">
             {[...Array(5)].map((_, i) => (
@@ -234,17 +280,28 @@ const Index = () => {
           </div>
         )}
 
-        {/* Notes list (full width) */}
+        {/* Notes list (full width, infinite scroll) */}
         {hasSearched && !isLoading && filteredNotes.length > 0 && (
           <div className="max-w-none">
             {filteredNotes.map((note) => (
               <NoteCard key={note.id} note={note} />
             ))}
+
+            {/* Infinite scroll sentinel */}
+            <div ref={sentinelRef} className="py-4">
+              {isFetchingNextPage && (
+                <div className="space-y-2 py-4 border-b border-border/40">
+                  <Skeleton className="h-5 w-48" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-5/6" />
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {/* Footer note */}
-        {hasSearched && !isLoading && !error && filteredNotes.length > 0 && (
+        {hasSearched && !isLoading && !error && filteredNotes.length > 0 && !hasNextPage && (
           <p className="text-center text-xs text-muted-foreground pb-8">
             Powered by Nostr · Vibed with{' '}
             <a
