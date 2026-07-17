@@ -1,5 +1,4 @@
 import { useCallback } from 'react';
-import JSZip from 'https://esm.sh/jszip@3.10.1';
 import type { StructuredNote } from './useStructuredNotes';
 
 /**
@@ -9,6 +8,7 @@ import type { StructuredNote } from './useStructuredNotes';
  * @param tags - Optional list of active filter tags to include in the header.
  */
 async function generateODT(notes: StructuredNote[], title?: string, tags?: string[]): Promise<Blob> {
+  const JSZip = (await import('https://esm.sh/jszip@3.10.1')).default;
   const zip = new JSZip();
 
   // -- mimetype (must be first, uncompressed) --
