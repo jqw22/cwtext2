@@ -110,7 +110,7 @@ interface UseNotesOptions {
  */
 export function useStructuredNotes(options: UseNotesOptions = {}) {
   const { nostr } = useNostr();
-  const { tags, search, limit = 200, enabled = true } = options;
+  const { tags, search, limit = 500, enabled = true } = options;
 
   // Use fixed relay group so curated notes are consistent regardless of login
   const queryNostr = useMemo(() => nostr.group(CURATED_RELAYS), [nostr]);
