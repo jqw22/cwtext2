@@ -77,6 +77,31 @@ const Index = () => {
     return result;
   }, [notes, selectedTags, search, hasSearched]);
 
+  // Filter and sort user notes (same tag/search logic as curated)
+  const filteredUserNotes = useMemo(() => {
+    if (!userNotes) return [];
+
+    let result = userNotes;
+
+    if (selectedTags.length > 0) {
+      result = result.filter((note) =>
+        selectedTags.some((tag) => note.tags.includes(tag)),
+      );
+    }
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        (note) =>
+          note.title.toLowerCase().includes(q) ||
+          note.content.toLowerCase().includes(q) ||
+          note.tags.some((t) => t.includes(q)),
+      );
+    }
+
+    return result;
+  }, [userNotes, selectedTags, search]);
+
   const handleAddTag = useCallback((tag: string) => {
     setSelectedTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]));
   }, []);
@@ -296,7 +321,7 @@ const Index = () => {
                     </div>
                   ) : userNotes && userNotes.length > 0 ? (
                     <div className="space-y-1">
-                      {userNotes.map((note) => (
+                      {filteredUserNotes.map((note) => (
                         <div key={note.id} className="py-3 border-b border-border/30 last:border-b-0">
                           <h3 className="text-sm font-semibold text-foreground mb-1">
                             {note.title}
