@@ -72,7 +72,7 @@ export function useTagCounts() {
       const filter: Record<string, unknown> = {
         kinds: [NOTE_KIND],
         authors: [APP_AUTHOR_PUBKEY],
-        limit: 100,
+        limit: 500,
       };
 
       const events = await queryNostr.query([filter], {
