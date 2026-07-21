@@ -1,10 +1,15 @@
 import { type NostrEvent } from '@nostrify/nostrify';
 import { useNostr } from '@nostrify/react';
+import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNostrPublish } from './useNostrPublish';
 import { APP_AUTHOR_PUBKEY } from '@/lib/appAuthor';
+import { APP_RELAYS } from '@/lib/appRelays';
 
 const NOTE_KIND = 30023;
+
+/** Consistent relay group for curated notes — unaffected by who logs in */
+const CURATED_RELAYS = APP_RELAYS.relays.map(r => r.url);
 
 /** Data extracted from a kind 30023 (NIP-23) long-form content note */
 export interface StructuredNote {
@@ -58,6 +63,9 @@ function parseNote(event: NostrEvent): StructuredNote {
 export function useTagCounts() {
   const { nostr } = useNostr();
 
+  // Use fixed relay group so tag counts are consistent regardless of login
+  const queryNostr = useMemo(() => nostr.group(CURATED_RELAYS), [nostr]);
+
   return useQuery({
     queryKey: ['nostr', 'tags', APP_AUTHOR_PUBKEY],
     queryFn: async () => {
@@ -67,7 +75,7 @@ export function useTagCounts() {
         limit: 100,
       };
 
-      const events = await nostr.query([filter], {
+      const events = await queryNostr.query([filter], {
         signal: AbortSignal.timeout(5000),
       });
 
@@ -104,6 +112,9 @@ export function useStructuredNotes(options: UseNotesOptions = {}) {
   const { nostr } = useNostr();
   const { tags, search, limit = 200, enabled = true } = options;
 
+  // Use fixed relay group so curated notes are consistent regardless of login
+  const queryNostr = useMemo(() => nostr.group(CURATED_RELAYS), [nostr]);
+
   return useQuery({
     queryKey: ['nostr', 'notes', APP_AUTHOR_PUBKEY, tags, search, limit],
     queryFn: async () => {
@@ -117,7 +128,7 @@ export function useStructuredNotes(options: UseNotesOptions = {}) {
         filter['#t'] = tags;
       }
 
-      const events = await nostr.query([filter], {
+      const events = await queryNostr.query([filter], {
         signal: AbortSignal.timeout(8000),
       });
 
