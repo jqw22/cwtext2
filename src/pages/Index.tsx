@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, PenLine, Search, Lock, UserPlus, Pencil } from 'lucide-react';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { useStructuredNotes, usePublishNote, useTagCounts } from '@/hooks/useStructuredNotes';
+import { useStructuredNotes, usePublishNote } from '@/hooks/useStructuredNotes';
 import { useUserNotes, usePublishUserNote } from '@/hooks/useUserNotes';
 import { useToast } from '@/hooks/useToast';
 import { APP_AUTHOR_PUBKEY } from '@/lib/appAuthor';
@@ -26,11 +26,10 @@ const Index = () => {
   const hasSearched = search.trim().length > 0 || selectedTags.length > 0;
   const isAppAuthor = user?.pubkey === APP_AUTHOR_PUBKEY;
 
-  // Curated notes (gated behind search for scale)
+  // Curated notes — always load for tag browser + search
   const { data: notes, isLoading, error } = useStructuredNotes({
     tags: selectedTags.length > 0 ? selectedTags : undefined,
     search: search.trim() || undefined,
-    enabled: hasSearched,
   });
 
   const { mutateAsync: publishNote, isPending: isPublishing } = usePublishNote();
@@ -44,8 +43,37 @@ const Index = () => {
     description: 'Create, search, tag, and export structured text notes on Nostr.',
   });
 
-  // Lightweight always-on tag query (no full note parsing, just tag extraction)
-  const { data: tagCounts } = useTagCounts();
+  // Compute tag counts from loaded notes + persist to localStorage
+  const tagCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    // Start with cached counts from localStorage
+    try {
+      const cached = localStorage.getItem('cwtext:tagCounts');
+      if (cached) {
+        const parsed = JSON.parse(cached) as [string, number][];
+        for (const [tag, count] of parsed) {
+          counts.set(tag, count);
+        }
+      }
+    } catch { /* ignore corrupt cache */ }
+
+    // Overlay counts from currently loaded notes
+    if (notes) {
+      for (const note of notes) {
+        for (const tag of note.tags) {
+          counts.set(tag, (counts.get(tag) || 0) + 1);
+        }
+      }
+    }
+
+    // Persist to localStorage
+    try {
+      localStorage.setItem('cwtext:tagCounts', JSON.stringify([...counts]));
+    } catch { /* ignore storage full */ }
+
+    return counts;
+  }, [notes]);
 
   // Filter and sort curated notes
   const filteredNotes = useMemo(() => {
