@@ -76,7 +76,7 @@ export function useTagCounts() {
       };
 
       const events = await queryNostr.query([filter], {
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(10000),
       });
 
       const counts = new Map<string, number>();
@@ -129,7 +129,7 @@ export function useStructuredNotes(options: UseNotesOptions = {}) {
       }
 
       const events = await queryNostr.query([filter], {
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(15000),
       });
 
       let notes = events.map(parseNote);
